@@ -1,0 +1,167 @@
+---
+title: "In Class Assignment"
+author: "Jen Johnson and Tina Chen"
+date: "12/5/2017"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+library(tidyverse)
+library(knitr)
+library(reshape)
+```
+
+```{r}
+data <- read.csv("hwscores.csv")
+```
+
+Function for binding columns of different length together.
+```{r}
+cbind.fill <- function(...){
+    nm <- list(...) 
+    nm <- lapply(nm, as.matrix)
+    n <- max(sapply(nm, nrow)) 
+    do.call(cbind, lapply(nm, function (x) 
+        rbind(x, matrix(, n-nrow(x), ncol(x))))) 
+}
+```
+
+## Part 1
+
+```{r}
+# get list of 24 people
+a <- data.frame(colnames(data))
+a$new <- substr(a$colnames.data., 1, 3)
+people <- unique(a$new)
+people2 <- data.frame(people)
+```
+
+```{r}
+# set up df where each col == 1 person's genuine scores
+genuine.data <- list()
+
+for(i in 1:length(people)){
+    id1 <- people[i]
+    # filter col
+    current <- select(data, starts_with(id1))
+    names <- colnames(current)
+    # filter row using names
+    temp <- current[names, ]
+    # only use the top half of the matrix
+    temp[lower.tri(temp)] <- NA
+    # remove NA and 0s
+    v <- unlist(temp)
+    d <- data.frame(v)
+    d2 <- na.exclude(d)
+    d3 <- d2[d2!=0]
+    d4 <- as.data.frame(d3)
+    # add to genuine.data
+    genuine.data <- cbind.fill(genuine.data, d4)
+}
+```
+
+```{r}
+# remove empty first col
+genuine.data <-subset(genuine.data, select= -c(1))
+# set colnames for legend
+colnames(genuine.data) <- people2$people
+genuine.data <- data.frame(genuine.data)
+# convert to long format
+temp <- gather(genuine.data, key = "key", value = "value")
+temp$value <- as.numeric(temp$value)
+
+# plot
+ggplot(data = temp, aes(x = value, color = key)) + 
+  geom_freqpoly() +
+  ggtitle("Genuine Distribution for All Subjects")
+```
+
+## Part 2
+
+```{r}
+# convert all columns to numeric
+numeric <- lapply(genuine.data, as.numeric)
+
+means <- data.frame(lapply(numeric, mean, na.rm = TRUE))
+ranges <- data.frame(lapply(numeric, range, na.rm = TRUE))
+
+# print nicely
+kable(means)
+kable(ranges)
+
+```
+
+## Part 3
+
+```{r}
+all.scores <- unlist(numeric)
+all.scores.mean <- data.frame(mean(all.scores, na.rm = TRUE))
+colnames(all.scores.mean)<- c("Mean")
+kable(all.scores.mean)
+```
+
+## Part 4
+
+```{r}
+# use Part 3 results and which.max find the index
+largest.mean.index <- which.max(means)
+largest.mean.person <- data.frame(people[largest.mean.index]) 
+smallest.mean.index <- which.min(means)
+smallest.mean.person <- data.frame(people[smallest.mean.index])
+
+t.ranges <- t(ranges)
+t.ranges <- as.data.frame(t.ranges)
+t.ranges$new <- abs(t.ranges$V1 - t.ranges$V2)
+
+largest.range.index <- which.max(t.ranges$new)
+largest.range.person <- data.frame(people[largest.range.index])
+
+kable(largest.mean.person) # s18
+kable(smallest.mean.person) 
+kable(largest.range.person) 
+```
+Highest average: While s26 gave us the highest average matching score, we treated it as an outlier because there was only 1 matching score in the s26 column of genuine.data. If we were to recalculate, the highest average matching score would actually be s18 (Chloe). This makes more sense because the images are all taken at very similar angles, with very similar lighting, and little variation in facial expression. 
+
+Lowest average: s24 (Jocelyn) has the lowest average matching score, because there are images with and without glasses, different facial expressions, hair styles (some up and some down), and various degrees of lighting.
+
+Largest range: s11 (Jen) has the largest range, because there there are many different poses, facial expression, lighting, and hair styles. 
+
+## Part 5
+
+```{r}
+
+# convert matrix into list format
+all.data <- as.matrix(data)
+scores_list <- melt(all.data)[melt(upper.tri(all.data))$value,]
+
+# get imposter data
+scores_list$seq_1_subject <- substr(scores_list$X1, 2, 3)
+scores_list$seq_2_subject <- substr(scores_list$X2, 2, 3)
+imposter_data <- scores_list[!scores_list$seq_1_subject==scores_list$seq_2_subject, ]
+
+# get the minimum distance score
+min_imposter <- min(imposter_data$value)
+min_imposter_pair <- which(imposter_data$value == min_imposter)
+
+kable(imposter_data[min_imposter_pair,])
+
+```
+
+The most similar looking imposter pair was s23d5 and s24d6. The two images share the same facial expression, lighting, and pose. The hair fringe at the top of the face and eyebrow angle are similar. 
+
+## Part 6
+
+```{r}
+
+genuine_data <- scores_list[scores_list$seq_1_subject==scores_list$seq_2_subject, ]
+
+min_genuine <- min(genuine_data$value)
+min_genuine_pair <- which(genuine_data$value == min_genuine)
+
+kable(genuine_data[min_genuine_pair,])
+
+```
+
+The lowest non-zero distance score was between s24's d8 and d3 photos. The photos are the same, but 1 had been rotated and relabelled.
